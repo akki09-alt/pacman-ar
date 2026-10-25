@@ -1,0 +1,2 @@
+PACMAN-AR-POSTER-V2
+This exact QR payload is required by index.html. Use the included pacman-poster.png and poster.html together.

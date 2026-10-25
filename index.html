@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#070916">
+<title>PAC-MAN AR — Play the Poster</title>
+<style>
+:root{--yellow:#ffe500;--cyan:#27e4ff;--bg:#070916;--muted:#b9c4e7;--panel:#101a3b;--blue:#316dff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:#f5f7ff;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;touch-action:manipulation}
+button{font:inherit;font-weight:850;border:0;border-radius:12px;min-height:46px;padding:12px 16px;background:var(--yellow);color:#080b18;cursor:pointer;touch-action:manipulation;user-select:none}
+button:disabled{opacity:.55;cursor:wait}.hidden{display:none!important}.screen{position:fixed;inset:0}
+#home{z-index:5;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at 50% 0,#1a2858,#070916 68%)}
+.inner{width:min(100%,440px);text-align:center}.eyebrow{font:800 11px ui-monospace,monospace;letter-spacing:.16em;color:var(--cyan)}
+h1{font-size:clamp(42px,12vw,66px);line-height:.94;margin:10px 0;color:var(--yellow)}p{line-height:1.45;color:#dbe4ff}.preview{display:block;width:min(48vw,180px);max-height:23vh;object-fit:contain;margin:8px auto 14px;border:1px solid #315aa8;border-radius:8px}
+.full{width:100%;margin:5px 0}.secondary{background:#1a2449;color:#f4f7ff;border:1px solid #40558c}.small{font-size:12px;color:var(--muted)}.error{color:#ffb6c5;min-height:1.4em;font-size:12px;overflow-wrap:anywhere}
+#gameScreen{z-index:3;background:#030510;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));gap:6px}
+header{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px}header strong{color:var(--yellow)}.tiny{font-size:12px;min-height:38px;padding:8px 12px;background:#172143;color:#fff;border:1px solid #5368a3;white-space:nowrap}
+#gameCanvas{display:block;width:min(92vw,420px);height:auto;max-height:calc(100dvh - 250px);aspect-ratio:5/7;border:1px solid #315aa8;border-radius:8px;touch-action:none;flex:none;background:#050817}
+.controls{display:flex;align-items:center;justify-content:center;gap:22px;flex:none}.dpad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,42px);gap:4px}.dpad button{min-height:40px;width:48px;padding:0;font-size:20px}.up{grid-column:2}.left{grid-column:1;grid-row:2}.down{grid-column:2;grid-row:2}.right{grid-column:3;grid-row:2}.label{font:800 9px ui-monospace,monospace;letter-spacing:.15em;text-align:center;margin-top:4px;color:#fff}
+#arScreen{z-index:4;background:#000;overflow:hidden}#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;background:#000}#arOverlay{position:absolute;top:0;left:0;width:500px;height:700px;z-index:1;transform-origin:0 0;pointer-events:none;display:none;will-change:transform}
+#arHUD{position:absolute;z-index:2;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
+#arHUD header,#arHUD .controls{pointer-events:auto}#arStatus{font-size:12px;background:#050713dc;padding:8px 10px;border-radius:10px;max-width:72vw}#arHUD .controls{align-self:center}#arHUD .dpad button{background:var(--yellow)}#arHUD .label{text-shadow:0 2px 4px #000}#exitAr{pointer-events:auto}.hint{font-size:12px;text-align:center;background:#050713d9;padding:8px 12px;border-radius:10px;align-self:center;max-width:90vw}
+@media(max-height:700px){#gameCanvas{max-height:calc(100dvh - 230px)}.dpad{grid-template-columns:repeat(3,42px);grid-template-rows:repeat(2,36px)}.dpad button{width:42px;min-height:35px}}
+</style>
+</head>
+<body>
+<section id="home" class="screen">
+  <div class="inner">
+    <div class="eyebrow">POCKET ARCADE / EXPERIMENT 02</div>
+    <h1>PAC-MAN<br>AR</h1>
+    <p>Play a mini Pac-Man maze. Test the game first, then scan the QR target on your laptop to place the maze in the poster’s game zone.</p>
+    <img class="preview" src="pacman-poster.png" alt="PAC-MAN AR poster preview">
+    <button id="start2d" class="full secondary" type="button">PLAY 2D TEST MODE</button>
+    <button id="startAR" class="full" type="button">START CAMERA AR</button>
+    <p class="small">Use the new <b>poster.html</b> included with this project. Keep the QR code at the top visible; the maze appears below it.</p>
+    <div id="homeError" class="error" role="status" aria-live="polite"></div>
+  </div>
+</section>
+<section id="gameScreen" class="screen hidden">
+  <header><div><strong>PAC-MAN · 2D TEST</strong><div id="flatStatus" class="small">Tap an arrow to move.</div></div><button id="exit2d" class="tiny" type="button">EXIT</button></header>
+  <canvas id="gameCanvas" width="500" height="700" aria-label="Playable Pac-Man maze"></canvas>
+  <div class="controls"><div><div class="dpad"><button class="up" data-dir="up" aria-label="Move up">▲</button><button class="left" data-dir="left" aria-label="Move left">◀</button><button class="down" data-dir="down" aria-label="Move down">▼</button><button class="right" data-dir="right" aria-label="Move right">▶</button></div><div class="label">MOVE</div></div><button id="reset2d" class="tiny" type="button">NEW GAME ↻</button></div>
+  <div class="small">Arrow keys / WASD or the buttons · Avoid ghosts, eat every dot</div>
+</section>
+<section id="arScreen" class="screen hidden">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="arOverlay" width="500" height="700" aria-hidden="true"></canvas>
+  <div id="arHUD">
+    <header><div><strong>PAC-MAN AR</strong><div id="arStatus" role="status" aria-live="polite">Opening camera…</div></div><button id="exitAr" class="tiny" type="button">EXIT</button></header>
+    <div id="hint" class="hint">Aim at the QR code on the laptop poster</div>
+    <div class="controls"><div><div class="dpad"><button class="up" data-dir="up" aria-label="Move up">▲</button><button class="left" data-dir="left" aria-label="Move left">◀</button><button class="down" data-dir="down" aria-label="Move down">▼</button><button class="right" data-dir="right" aria-label="Move right">▶</button></div><div class="label">MOVE</div></div><button id="resetAr" class="tiny" type="button">NEW GAME ↻</button></div>
+  </div>
+</section>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const home=$('home'),gameScreen=$('gameScreen'),arScreen=$('arScreen'),gameCanvas=$('gameCanvas'),gameCtx=gameCanvas.getContext('2d'),video=$('video'),arOverlay=$('arOverlay'),arCtx=arOverlay.getContext('2d');
+const CW=500,CH=700,COLS=19,ROWS=17,QR_VALUE='PACMAN-AR-POSTER-V2';
+// The new poster is 1000x1400. BarcodeDetector reports these QR-code corners in
+// the poster's 500x700 half-resolution coordinate system (verified against the generated PNG).
+const SOURCE_QR=[{x:177.5,y:150},{x:322,y:150},{x:322,y:294.5},{x:177.5,y:294.5}];
+const DIRECTIONS={up:[0,-1],right:[1,0],down:[0,1],left:[-1,0]};
+const GHOST_COLORS=['#ff4268','#28e7ff','#ff9a35','#f38bff'];
+let mode='home', game=null, cameraStream=null, barcodeDetector=null, scanBusy=false,lastScan=0,lastSeen=0,lastFrame=0,tickAccumulator=0,rafId=0;
+function buildMaze(){
+  const m=Array.from({length:ROWS},(_,y)=>Array.from({length:COLS},(_,x)=>(x===0||x===COLS-1||y===0||y===ROWS-1)?'#':'.'));
+  // Short wall segments leave several crossings on every row, so the maze is always navigable.
+  for(let y=2;y<ROWS-1;y+=2){
+    const gapA=2+((y*3)%13), gapB=2+((y*7+5)%13), gapC=2+((y*5+9)%13);
+    for(let x=2;x<COLS-2;x++) if(x!==gapA&&x!==gapB&&x!==gapC) m[y][x]='#';
+  }
+  // Keep the four power pellet corners and the player/ghost starts open.
+  for(const [x,y] of [[1,1],[COLS-2,1],[1,ROWS-2],[COLS-2,ROWS-2],[9,15],[9,7],[8,7],[10,7],[9,9]]) m[y][x]='.';
+  return m;
+}
+const maze=buildMaze();
+function resetGame(){
+  game={pellets:maze.map(row=>row.map(c=>c==='#'?'':'.')),player:{x:9,y:15,dir:'left',next:'left'},ghosts:[
+    {x:9,y:7,sx:9,sy:7,color:GHOST_COLORS[0],dir:'left'},
+    {x:8,y:7,sx:8,sy:7,color:GHOST_COLORS[1],dir:'up'},
+    {x:10,y:7,sx:10,sy:7,color:GHOST_COLORS[2],dir:'down'},
+    {x:9,y:9,sx:9,sy:9,color:GHOST_COLORS[3],dir:'right'}
+  ],score:0,lives:3,powerUntil:0,invulnerableUntil:performance.now()+1100,status:'playing',ticks:0};
+  for(const [x,y] of [[1,1],[COLS-2,1],[1,ROWS-2],[COLS-2,ROWS-2]]) game.pellets[y][x]='o';
+  eatPellet(); drawAll();
+}
+function tileOpen(x,y){return y>=0&&y<ROWS&&x>=0&&x<COLS&&maze[y][x]!=='#';}
+function setDirection(name){if(game&&DIRECTIONS[name]&&game.status==='playing')game.player.next=name;}
+function eatPellet(){
+  const p=game.player,v=game.pellets[p.y][p.x];if(!v)return;
+  game.pellets[p.y][p.x]='';game.score+=v==='o'?50:10;if(v==='o')game.powerUntil=performance.now()+6500;
+  let remaining=0;for(const row of game.pellets)for(const cell of row)if(cell)remaining++;
+  if(remaining===0)game.status='won';
+}
+function moveGhost(g,now){
+  let options=Object.keys(DIRECTIONS).filter(d=>{const [dx,dy]=DIRECTIONS[d];return tileOpen(g.x+dx,g.y+dy)});
+  const reverse={up:'down',down:'up',left:'right',right:'left'}[g.dir];
+  let forward=options.filter(d=>d!==reverse);if(forward.length)options=forward;if(!options.length)return;
+  const p=game.player;
+  if(now>=game.powerUntil&&Math.random()<0.68){
+    options.sort((a,b)=>{const [ax,ay]=DIRECTIONS[a],[bx,by]=DIRECTIONS[b];return (Math.abs(g.x+ax-p.x)+Math.abs(g.y+ay-p.y))-(Math.abs(g.x+bx-p.x)+Math.abs(g.y+by-p.y))});
+    if(Math.random()<0.35)options=options.slice(0,Math.min(2,options.length));
+  }
+  g.dir=options[Math.floor(Math.random()*options.length)];const [dx,dy]=DIRECTIONS[g.dir];g.x+=dx;g.y+=dy;
+}
+function tick(){
+  if(!game||game.status!=='playing')return;const now=performance.now(),p=game.player;
+  const [nx,ny]=DIRECTIONS[p.next];if(tileOpen(p.x+nx,p.y+ny))p.dir=p.next;
+  const [dx,dy]=DIRECTIONS[p.dir];if(tileOpen(p.x+dx,p.y+dy)){p.x+=dx;p.y+=dy;}
+  eatPellet();game.ticks++;if(game.ticks%2===0)for(const g of game.ghosts)moveGhost(g,now);
+  for(const g of game.ghosts){if(g.x===p.x&&g.y===p.y&&now>game.invulnerableUntil){
+    if(now<game.powerUntil){game.score+=200;g.x=g.sx;g.y=g.sy;g.dir='left';}
+    else{game.lives--;if(game.lives<=0){game.status='over';break;}p.x=9;p.y=15;p.dir='left';p.next='left';for(const q of game.ghosts){q.x=q.sx;q.y=q.sy;}game.powerUntil=0;game.invulnerableUntil=now+1250;}
+  }}
+}
+function drawPac(ctx,cx,cy,r,dir,now){const ang={right:0,down:Math.PI/2,left:Math.PI,up:-Math.PI/2}[dir]||0,mouth=.12+Math.abs(Math.sin(now/80))*.28;ctx.fillStyle='#ffe500';ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,ang+mouth,ang+Math.PI*2-mouth);ctx.closePath();ctx.fill();}
+function drawGhost(ctx,cx,cy,r,g,now){ctx.fillStyle=now<game.powerUntil?(Math.floor(now/220)%2?'#eaf0ff':'#315dff'):g.color;ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,0);ctx.lineTo(cx+r,cy+r*.8);ctx.lineTo(cx+r*.45,cy+r*.52);ctx.lineTo(cx,cy+r*.8);ctx.lineTo(cx-r*.45,cy+r*.52);ctx.lineTo(cx-r,cy+r*.8);ctx.closePath();ctx.fill();ctx.fillStyle='white';ctx.beginPath();ctx.arc(cx-r*.28,cy-r*.08,r*.2,0,Math.PI*2);ctx.arc(cx+r*.28,cy-r*.08,r*.2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#10152e';ctx.beginPath();ctx.arc(cx-r*.25,cy-r*.06,r*.09,0,Math.PI*2);ctx.arc(cx+r*.31,cy-r*.06,r*.09,0,Math.PI*2);ctx.fill();}
+function drawMaze(ctx,x,y,tile,now){
+  const bw=COLS*tile,bh=ROWS*tile;ctx.fillStyle='rgba(3,7,22,.94)';ctx.fillRect(x-8,y-8,bw+16,bh+16);ctx.strokeStyle='#27e4ff';ctx.lineWidth=2;ctx.strokeRect(x-8,y-8,bw+16,bh+16);
+  for(let gy=0;gy<ROWS;gy++)for(let gx=0;gx<COLS;gx++){
+    const px=x+gx*tile,py=y+gy*tile;
+    if(maze[gy][gx]==='#'){ctx.fillStyle='#071744';ctx.fillRect(px+1,py+1,tile-2,tile-2);ctx.strokeStyle='#285aff';ctx.lineWidth=Math.max(1,tile*.065);ctx.strokeRect(px+1.8,py+1.8,tile-3.6,tile-3.6);}
+    else{const v=game.pellets[gy][gx];if(v){ctx.fillStyle=v==='o'?'#ffe500':'#fff3ca';ctx.beginPath();ctx.arc(px+tile/2,py+tile/2,v==='o'?tile*.23:Math.max(1.4,tile*.09),0,Math.PI*2);ctx.fill();}}
+  }
+  const p=game.player;drawPac(ctx,x+(p.x+.5)*tile,y+(p.y+.5)*tile,tile*.43,p.dir,now);
+  for(const g of game.ghosts)drawGhost(ctx,x+(g.x+.5)*tile,y+(g.y+.5)*tile,tile*.43,g,now);
+}
+function draw2D(){
+  const ctx=gameCtx,now=performance.now();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,CW,CH);ctx.fillStyle='#050817';ctx.fillRect(0,0,CW,CH);
+  ctx.fillStyle='#ffe500';ctx.font='bold 25px ui-monospace,monospace';ctx.fillText('PAC-MAN',22,36);ctx.fillStyle='#eaf0ff';ctx.font='bold 15px ui-monospace,monospace';ctx.fillText('SCORE '+String(game.score).padStart(5,'0'),22,64);ctx.fillText('LIVES '+game.lives,368,64);
+  drawMaze(ctx,60,130,20,now);
+  if(game.status!=='playing'){ctx.fillStyle='rgba(2,5,16,.9)';ctx.fillRect(56,305,388,82);ctx.fillStyle=game.status==='won'?'#ffe500':'#ff5778';ctx.textAlign='center';ctx.font='bold 25px ui-monospace,monospace';ctx.fillText(game.status==='won'?'MAZE CLEARED':'GAME OVER',250,340);ctx.fillStyle='#fff';ctx.font='13px ui-monospace,monospace';ctx.fillText('Tap NEW GAME to restart',250,365);ctx.textAlign='left';}
+  $('flatStatus').textContent=`Score ${game.score} · Lives ${game.lives} · ${game.status==='playing'?'Keep moving!':game.status==='won'?'You won!':'Game over'}`;
+}
+function drawAR(){
+  const ctx=arCtx,now=performance.now();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,CW,CH);
+  // Keep the QR marker at the top of the poster uncovered so tracking does not drop.
+  ctx.fillStyle='rgba(4,8,25,.97)';ctx.fillRect(54,360,392,335);ctx.strokeStyle='#27e4ff';ctx.lineWidth=2;ctx.strokeRect(54,360,392,335);
+  ctx.fillStyle='#ffe500';ctx.font='bold 14px ui-monospace,monospace';ctx.fillText('PAC-MAN // MAZE',70,384);ctx.fillStyle='#eaf0ff';ctx.font='bold 12px ui-monospace,monospace';ctx.fillText('SCORE '+String(game.score).padStart(5,'0')+'   LIVES '+game.lives,70,402);
+  drawMaze(ctx,98,414,16,now);
+  if(game.status!=='playing'){ctx.fillStyle='rgba(2,5,16,.94)';ctx.fillRect(85,485,330,70);ctx.fillStyle=game.status==='won'?'#ffe500':'#ff5778';ctx.textAlign='center';ctx.font='bold 20px ui-monospace,monospace';ctx.fillText(game.status==='won'?'MAZE CLEARED':'GAME OVER',250,515);ctx.fillStyle='#fff';ctx.font='12px ui-monospace,monospace';ctx.fillText('Tap NEW GAME to restart',250,538);ctx.textAlign='left';}
+}
+function drawAll(){if(!game)return;if(mode==='2d')draw2D();else if(mode==='ar')drawAR();}
+function showScreen(which){mode=which;home.classList.toggle('hidden',which!=='home');gameScreen.classList.toggle('hidden',which!=='2d');arScreen.classList.toggle('hidden',which!=='ar');}
+function solveLinear(A,b){const n=b.length,m=A.map((row,i)=>row.concat(b[i]));for(let c=0;c<n;c++){let pivot=c;for(let r=c+1;r<n;r++)if(Math.abs(m[r][c])>Math.abs(m[pivot][c]))pivot=r;if(Math.abs(m[pivot][c])<1e-9)throw Error('Could not calculate poster alignment.');[m[c],m[pivot]]=[m[pivot],m[c]];const div=m[c][c];for(let j=c;j<=n;j++)m[c][j]/=div;for(let r=0;r<n;r++)if(r!==c){const k=m[r][c];for(let j=c;j<=n;j++)m[r][j]-=k*m[c][j];}}return m.map(row=>row[n]);}
+function getHomography(src,dst){const A=[],b=[];for(let i=0;i<4;i++){const x=src[i].x,y=src[i].y,u=dst[i].x,v=dst[i].y;A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);}return solveLinear(A,b).concat(1);}
+function sortCorners(points){
+  const pts=points.map(p=>({x:Number(p.x),y:Number(p.y)}));
+  if(pts.length!==4||pts.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))throw Error('The QR scanner returned invalid corner coordinates.');
+  const tl=pts.reduce((a,b)=>a.x+a.y<b.x+b.y?a:b),br=pts.reduce((a,b)=>a.x+a.y>b.x+b.y?a:b),tr=pts.reduce((a,b)=>a.x-a.y>b.x-b.y?a:b),bl=pts.reduce((a,b)=>a.x-a.y<b.x-b.y?a:b);
+  return [tl,tr,br,bl];
+}
+function videoToScreen(p){const vw=window.innerWidth,vh=window.innerHeight,iw=video.videoWidth,ih=video.videoHeight;if(!iw||!ih)throw Error('Camera is not ready yet.');const scale=Math.max(vw/iw,vh/ih),ox=(vw-iw*scale)/2,oy=(vh-ih*scale)/2;return{x:p.x*scale+ox,y:p.y*scale+oy};}
+function applyPosterTransform(corners){const ordered=sortCorners(corners),dst=ordered.map(videoToScreen),h=getHomography(SOURCE_QR,dst);const css=[h[0],h[3],0,h[6],h[1],h[4],0,h[7],0,0,1,0,h[2],h[5],0,1];arOverlay.style.transform='matrix3d('+css.map(n=>Number(n.toFixed(8))).join(',')+')';arOverlay.style.display='block';}
+async function scanOnce(){if(mode!=='ar'||scanBusy||!barcodeDetector||video.readyState<2)return;const now=performance.now();if(now-lastScan<140)return;lastScan=now;scanBusy=true;try{const found=await barcodeDetector.detect(video);const hit=found.find(q=>q.rawValue===QR_VALUE);if(hit&&hit.cornerPoints&&hit.cornerPoints.length>=4){applyPosterTransform(hit.cornerPoints.slice(0,4));lastSeen=performance.now();$('arStatus').textContent=`TARGET LOCKED · Score ${game.score} · Lives ${game.lives}`;$('hint').textContent='Poster found · play with the arrows';}else if(performance.now()-lastSeen>950){arOverlay.style.display='none';$('arStatus').textContent='Searching for PAC-MAN target…';$('hint').textContent='Keep the laptop QR code visible inside the camera';}}catch(err){console.warn('QR tracking frame error',err);if(performance.now()-lastSeen>1000){arOverlay.style.display='none';$('arStatus').textContent='Tracking error · move closer and keep the QR sharp';}}finally{scanBusy=false;}}
+async function startAR(){const button=$('startAR');button.disabled=true;$('homeError').textContent='Opening camera…';try{
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw Error('Camera access is unavailable. Open the published HTTPS page in Chrome on Android.');
+  if(!('BarcodeDetector'in window))throw Error('This browser does not support QR detection. Update Chrome on Android; 2D mode works without the camera.');
+  const formats=await BarcodeDetector.getSupportedFormats();if(!formats.includes('qr_code'))throw Error('QR detection is not supported in this browser.');
+  const detector=new BarcodeDetector({formats:['qr_code']});
+  // Call camera permission flow directly from the button action, without loading scripts first.
+  const streamPromise=navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480}}});
+  cameraStream=await streamPromise;video.srcObject=cameraStream;await video.play();barcodeDetector=detector;lastSeen=0;lastScan=0;scanBusy=false;arOverlay.style.display='none';resetGame();showScreen('ar');$('arStatus').textContent='Camera ready · searching for target…';$('hint').textContent='Aim at the QR code on the laptop poster';$('homeError').textContent='';
+ }catch(err){if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}barcodeDetector=null;video.srcObject=null;showScreen('home');$('homeError').textContent=err&&err.message?err.message:'Could not start camera. Check browser permission and reload.';console.error(err);}finally{button.disabled=false;}}
+function stopAR(){if(cameraStream){for(const track of cameraStream.getTracks())track.stop();cameraStream=null;}video.srcObject=null;barcodeDetector=null;scanBusy=false;lastSeen=0;arOverlay.style.display='none';arOverlay.style.transform='none';showScreen('home');}
+function frame(now){const dt=Math.min(100,now-(lastFrame||now));lastFrame=now;if(mode==='2d'||mode==='ar'){tickAccumulator+=dt;while(tickAccumulator>=145){tick();tickAccumulator-=145;}drawAll();if(mode==='ar')scanOnce();}else tickAccumulator=0;rafId=requestAnimationFrame(frame);}
+$('start2d').addEventListener('click',()=>{if(cameraStream)stopAR();resetGame();showScreen('2d');draw2D();});
+$('exit2d').addEventListener('click',()=>showScreen('home'));
+$('reset2d').addEventListener('click',()=>{resetGame();draw2D();});
+$('startAR').addEventListener('click',startAR);$('exitAr').addEventListener('click',stopAR);$('resetAr').addEventListener('click',()=>{resetGame();drawAR();});
+document.querySelectorAll('[data-dir]').forEach(button=>{const move=e=>{e.preventDefault();setDirection(button.dataset.dir);};button.addEventListener('pointerdown',move,{passive:false});button.addEventListener('click',move);});
+window.addEventListener('keydown',e=>{const keys={ArrowUp:'up',w:'up',W:'up',ArrowDown:'down',s:'down',S:'down',ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'};if(keys[e.key]&&(mode==='2d'||mode==='ar')){e.preventDefault();setDirection(keys[e.key]);}if((e.key==='r'||e.key==='R')&&(mode==='2d'||mode==='ar')){resetGame();drawAll();}});
+window.addEventListener('pagehide',()=>{if(cameraStream)cameraStream.getTracks().forEach(t=>t.stop());});
+resetGame();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
